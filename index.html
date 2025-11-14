@@ -63,30 +63,26 @@
     </div>
   </div>
 
-  <!-- Firebase SDK (compat) -->
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
   <script>
-    // --------- IMPORTANT: replace with your Firebase config -------------
-  const firebaseConfig = {
-    apiKey: "AIzaSyB8coyzmAa-9w5GJ4Qj0syE0hq-uXSbfv0",
-    authDomain: "realtimedatabase-2790a.firebaseapp.com",
-    databaseURL: "https://realtimedatabase-2790a-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "realtimedatabase-2790a",
-    storageBucket: "realtimedatabase-2790a.firebasestorage.app",
-    messagingSenderId: "446913418450",
-    appId: "1:446913418450:web:68c6975727859da74f090b",
-    measurementId: "G-TNQD27DEZP"
-  };
-    // -------------------------------------------------------------------
+    const firebaseConfig = {
+      apiKey: "AIzaSyB8coyzmAa-9w5GJ4Qj0syE0hq-uXSbfv0",
+      authDomain: "realtimedatabase-2790a.firebaseapp.com",
+      databaseURL: "https://realtimedatabase-2790a-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "realtimedatabase-2790a",
+      storageBucket: "realtimedatabase-2790a.firebasestorage.app",
+      messagingSenderId: "446913418450",
+      appId: "1:446913418450:web:68c6975727859da74f090b",
+      measurementId: "G-TNQD27DEZP"
+    };
 
-    // init firebase
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     const linksRef = db.ref('links');
 
-    // UI refs
     const titleEl = document.getElementById('title');
     const urlEl = document.getElementById('url');
     const addBtn = document.getElementById('add');
@@ -96,7 +92,6 @@
     const clearSearchBtn = document.getElementById('clearSearch');
     const copyBtn = document.getElementById('copyBtn');
 
-    // Helpers
     function sanitizeUrl(u){
       try {
         const s = u.trim();
@@ -105,55 +100,72 @@
       } catch(e){ return u; }
     }
 
-    // Add or update link
-    addBtn.addEventListener('click', () => {
-      const title = titleEl.value.trim();
-      const rawUrl = urlEl.value.trim();
-      if(!title || !rawUrl){ alert('Please enter both title and URL'); return; }
-      const url = sanitizeUrl(rawUrl);
-      // Using push allows duplicates; to support update by exact URL/title we use URL as key hashed.
-      const key = btoa(url).replace(/=+$/,''); // simple key from URL (not secure but works)
-      const payload = { title, url, updatedAt: Date.now() };
-      linksRef.child(key).set(payload).then(()=> {
-        titleEl.value = '';
-        urlEl.value = '';
-      }).catch(err => alert('Failed to save: '+err.message));
-    });
-
-    // Remove link
-    function removeLink(key){
-      if(!confirm('Remove this link?')) return;
-      linksRef.child(key).remove().catch(err => alert('Failed to remove: '+err.message));
+    // 🔥 FIX: Safe SHA-256 key generator
+    async function hashKey(str) {
+      const msg = new TextEncoder().encode(str);
+      const buf = await crypto.subtle.digest("SHA-256", msg);
+      return Array.from(new Uint8Array(buf)).map(x => x.toString(16).padStart(2,"0")).join('');
     }
 
-    // Render single item
+    addBtn.addEventListener('click', async () => {
+      const title = titleEl.value.trim();
+      const rawUrl = urlEl.value.trim();
+
+      if (!title || !rawUrl) {
+        alert('Please enter both title and URL');
+        return;
+      }
+
+      const url = sanitizeUrl(rawUrl);
+      const key = await hashKey(url);   // FIXED — no more undefined
+
+      const payload = { title, url, updatedAt: Date.now() };
+
+      linksRef.child(key).set(payload).then(() => {
+        titleEl.value = '';
+        urlEl.value = '';
+      }).catch(err => alert('Failed to save: ' + err.message));
+    });
+
+    function removeLink(key) {
+      if (!confirm('Remove this link?')) return;
+      linksRef.child(key).remove();
+    }
+
     function renderItem(key, data){
       const div = document.createElement('div');
       div.className = 'link';
-      div.id = 'link-'+key;
+      div.id = 'link-' + key;
+
       const left = document.createElement('div');
       left.className = 'meta';
-      const t = document.createElement('div');
-      t.innerHTML = `<div class="title">${escapeHtml(data.title)}</div><div class="url">${escapeHtml(data.url)}</div>`;
-      left.appendChild(t);
+      left.innerHTML = `
+        <div class="title">${escapeHtml(data.title)}</div>
+        <div class="url">${escapeHtml(data.url)}</div>
+      `;
+
       const right = document.createElement('div');
       right.className = 'right';
+
       const openBtn = document.createElement('button');
       openBtn.className = 'btn-ghost';
       openBtn.innerText = 'Open';
       openBtn.onclick = () => window.open(data.url, '_blank');
+
       const editBtn = document.createElement('button');
       editBtn.className = 'btn-ghost';
       editBtn.innerText = 'Edit';
       editBtn.onclick = () => {
         titleEl.value = data.title;
         urlEl.value = data.url;
-        window.scrollTo({top:0,behavior:'smooth'});
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       };
+
       const delBtn = document.createElement('button');
       delBtn.className = 'btn-ghost';
       delBtn.innerText = 'Delete';
       delBtn.onclick = () => removeLink(key);
+
       right.appendChild(openBtn);
       right.appendChild(editBtn);
       right.appendChild(delBtn);
@@ -163,69 +175,55 @@
       return div;
     }
 
-    // Escape
-    function escapeHtml(s){ return String(s).replace(/[&<>"']/g, (m)=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, m => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[m]));
+    }
 
-    // Keep local map of items for searching & rendering
     const local = {};
 
     function updateView(){
-      // produce filtered list
       const q = searchEl.value.trim().toLowerCase();
       linksEl.innerHTML = '';
+
       const items = Object.entries(local)
         .filter(([k,v]) => {
-          if(!v) return false;
-          if(!q) return true;
-          return (v.title && v.title.toLowerCase().includes(q)) || (v.url && v.url.toLowerCase().includes(q));
+          if (!v) return false;
+          if (!q) return true;
+          return v.title.toLowerCase().includes(q) ||
+                 v.url.toLowerCase().includes(q);
         })
         .sort((a,b)=> (b[1].updatedAt||0) - (a[1].updatedAt||0));
-      if(items.length === 0){
+
+      if (items.length === 0) {
         linksEl.innerHTML = '<div class="empty">No links yet. Add one above.</div>';
       } else {
-        items.forEach(([k,v]) => {
-          const node = renderItem(k,v);
-          linksEl.appendChild(node);
-        });
+        items.forEach(([k,v]) => linksEl.appendChild(renderItem(k,v)));
       }
       countEl.innerText = Object.keys(local).length + ' links';
     }
 
-    // React to DB changes in realtime
-    linksRef.on('child_added', snap => {
-      local[snap.key] = snap.val();
-      updateView();
-    });
-    linksRef.on('child_changed', snap => {
-      local[snap.key] = snap.val();
-      updateView();
-    });
-    linksRef.on('child_removed', snap => {
-      delete local[snap.key];
-      updateView();
-    });
+    linksRef.on('child_added', snap => { local[snap.key] = snap.val(); updateView(); });
+    linksRef.on('child_changed', snap => { local[snap.key] = snap.val(); updateView(); });
+    linksRef.on('child_removed', snap => { delete local[snap.key]; updateView(); });
 
-    // Search handlers
     searchEl.addEventListener('input', updateView);
-    clearSearchBtn.addEventListener('click', ()=>{ searchEl.value=''; updateView(); });
+    clearSearchBtn.addEventListener('click', () => { searchEl.value = ''; updateView(); });
 
-    // Copy share URL
-    copyBtn.addEventListener('click', ()=>{
-      navigator.clipboard?.writeText(location.href).then(()=> {
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard?.writeText(location.href).then(() => {
         copyBtn.innerText = 'Copied!';
         setTimeout(()=> copyBtn.innerText = 'Share', 1200);
-      }).catch(()=> alert('Copy failed — select and copy the address bar.'));
+      });
     });
 
-    // initial snapshot (in case on() events missed)
-    linksRef.once('value').then(snap=>{
-      snap.forEach(child=> local[child.key] = child.val());
-      updateView();
-    }).catch(err => {
-      console.error('Firebase read error', err);
-      linksEl.innerHTML = '<div class="empty">Unable to load links. Check Firebase configuration and DB rules.</div>';
-    });
+    linksRef.once('value')
+      .then(snap => { snap.forEach(child => local[child.key] = child.val()); updateView(); })
+      .catch(err => {
+        console.error('Firebase read error', err);
+        linksEl.innerHTML = '<div class="empty">Unable to load links. Check Firebase configuration and DB rules.</div>';
+      });
   </script>
 </body>
 </html>
-
