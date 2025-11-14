@@ -4,8 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Shared Link Hub</title>
-  <link rel="icon" type="image/png" href="icons8-link-office-m-32.png">
-  <link rel="shortcut icon" href="icons8-link-office-m-32.png" type="image/png">
   <style>
     :root{--bg:#0f1724;--card:#0b1220;--muted:#9aa4b2;--accent:#06b6d4;--glass: rgba(255,255,255,0.02)}
     *{box-sizing:border-box;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
@@ -19,10 +17,10 @@
     input[type=text]{flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:var(--glass);color:inherit}
     button{padding:10px 12px;border-radius:8px;border:0;background:linear-gradient(90deg,var(--accent),#0ea5a1);color:#042;cursor:pointer}
     .links{margin-top:12px;display:grid;gap:8px}
-    .link{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01))}
-    .meta{display:flex;gap:10px;align-items:center}
-    .title{font-weight:600}
-    .url{font-size:12px;color:var(--muted)}
+    .link{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); flex-wrap:wrap;}
+    .meta{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;max-width:100%;}
+    .title{font-weight:600;word-break:break-word;overflow-wrap:break-word;white-space:normal;max-width:100%;}
+    .url{font-size:12px;color:var(--muted);word-break:break-word;overflow-wrap:break-word;white-space:normal;max-width:100%;}
     .small{font-size:12px;color:var(--muted)}
     .searchbar{display:flex;gap:8px;margin-top:10px}
     .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted);padding:8px;border-radius:8px;cursor:pointer}
@@ -31,19 +29,20 @@
     .right{display:flex;gap:8px;align-items:center}
     .empty{color:var(--muted);padding:20px;text-align:center}
     .note{font-size:12px;color:var(--muted);margin-top:8px}
-/* FIX: allow long URLs to wrap instead of stretching horizontally */
-   .url, .title {
-        word-break: break-word;
-        overflow-wrap: break-word;
-        white-space: normal;
-        max-width: 100%;
-} 
   </style>
+
+  <!-- Favicon (optional, replace the path with yours) -->
+  <link rel="icon" type="image/png" href="favicon.png" />
 </head>
+
 <body>
   <div class="container">
     <header>
-      <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M3 12h18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 6h18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/><path d="M3 18h18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path d="M3 12h18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M3 6h18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/>
+        <path d="M3 18h18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/>
+      </svg>
       <div>
         <h1>Shared Link Hub</h1>
         <div class="sub">Publicly accessible — live updates for everyone</div>
@@ -72,7 +71,7 @@
     </div>
   </div>
 
-  <!-- Firebase SDK -->
+  <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
@@ -109,53 +108,37 @@
       } catch(e){ return u; }
     }
 
-    // 🔥 FIX: Safe SHA-256 key generator
-    async function hashKey(str) {
-      const msg = new TextEncoder().encode(str);
-      const buf = await crypto.subtle.digest("SHA-256", msg);
-      return Array.from(new Uint8Array(buf)).map(x => x.toString(16).padStart(2,"0")).join('');
-    }
-
-    addBtn.addEventListener('click', async () => {
+    addBtn.addEventListener('click', () => {
       const title = titleEl.value.trim();
       const rawUrl = urlEl.value.trim();
-
-      if (!title || !rawUrl) {
-        alert('Please enter both title and URL');
-        return;
-      }
-
+      if(!title || !rawUrl){ alert('Please enter both title and URL'); return; }
       const url = sanitizeUrl(rawUrl);
-      const key = await hashKey(url);   // FIXED — no more undefined
-
+      const key = btoa(url).replace(/=+$/,'');
       const payload = { title, url, updatedAt: Date.now() };
-
-      linksRef.child(key).set(payload).then(() => {
+      linksRef.child(key).set(payload).then(()=> {
         titleEl.value = '';
         urlEl.value = '';
-      }).catch(err => alert('Failed to save: ' + err.message));
+      }).catch(err => alert('Failed to save: '+err.message));
     });
 
-    function removeLink(key) {
-      if (!confirm('Remove this link?')) return;
-      linksRef.child(key).remove();
+    function removeLink(key){
+      if(!confirm('Remove this link?')) return;
+      linksRef.child(key).remove().catch(err => alert('Failed to remove: '+err.message));
     }
 
     function renderItem(key, data){
       const div = document.createElement('div');
       div.className = 'link';
-      div.id = 'link-' + key;
+      div.id = 'link-'+key;
 
       const left = document.createElement('div');
       left.className = 'meta';
-      left.innerHTML = `
-        <div class="title">${escapeHtml(data.title)}</div>
-        <div class="url">${escapeHtml(data.url)}</div>
-      `;
+      const t = document.createElement('div');
+      t.innerHTML = `<div class="title">${escapeHtml(data.title)}</div><div class="url">${escapeHtml(data.url)}</div>`;
+      left.appendChild(t);
 
       const right = document.createElement('div');
       right.className = 'right';
-
       const openBtn = document.createElement('button');
       openBtn.className = 'btn-ghost';
       openBtn.innerText = 'Open';
@@ -167,7 +150,7 @@
       editBtn.onclick = () => {
         titleEl.value = data.title;
         urlEl.value = data.url;
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({top:0,behavior:'smooth'});
       };
 
       const delBtn = document.createElement('button');
@@ -184,10 +167,8 @@
       return div;
     }
 
-    function escapeHtml(s){
-      return String(s).replace(/[&<>"']/g, m => ({
-        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-      }[m]));
+    function escapeHtml(s){ 
+      return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
     }
 
     const local = {};
@@ -195,17 +176,12 @@
     function updateView(){
       const q = searchEl.value.trim().toLowerCase();
       linksEl.innerHTML = '';
-
+      
       const items = Object.entries(local)
-        .filter(([k,v]) => {
-          if (!v) return false;
-          if (!q) return true;
-          return v.title.toLowerCase().includes(q) ||
-                 v.url.toLowerCase().includes(q);
-        })
+        .filter(([k,v]) => v && (!q || v.title.toLowerCase().includes(q) || v.url.toLowerCase().includes(q)))
         .sort((a,b)=> (b[1].updatedAt||0) - (a[1].updatedAt||0));
 
-      if (items.length === 0) {
+      if(items.length === 0){
         linksEl.innerHTML = '<div class="empty">No links yet. Add one above.</div>';
       } else {
         items.forEach(([k,v]) => linksEl.appendChild(renderItem(k,v)));
@@ -218,23 +194,19 @@
     linksRef.on('child_removed', snap => { delete local[snap.key]; updateView(); });
 
     searchEl.addEventListener('input', updateView);
-    clearSearchBtn.addEventListener('click', () => { searchEl.value = ''; updateView(); });
+    clearSearchBtn.addEventListener('click', ()=>{ searchEl.value=''; updateView(); });
 
-    copyBtn.addEventListener('click', () => {
-      navigator.clipboard?.writeText(location.href).then(() => {
+    copyBtn.addEventListener('click', ()=>{
+      navigator.clipboard?.writeText(location.href).then(()=> {
         copyBtn.innerText = 'Copied!';
         setTimeout(()=> copyBtn.innerText = 'Share', 1200);
       });
     });
 
-    linksRef.once('value')
-      .then(snap => { snap.forEach(child => local[child.key] = child.val()); updateView(); })
-      .catch(err => {
-        console.error('Firebase read error', err);
-        linksEl.innerHTML = '<div class="empty">Unable to load links. Check Firebase configuration and DB rules.</div>';
-      });
+    linksRef.once('value').then(snap=>{
+      snap.forEach(child=> local[child.key] = child.val());
+      updateView();
+    });
   </script>
 </body>
 </html>
-
-
